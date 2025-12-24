@@ -164,7 +164,7 @@ if submitted:
     left, right = st.columns([1.2, 1.0], gap="large")
 
     with left:
-        st.subheader("Model Input Features (aligned)")
+        st.subheader("Model Input Features")
         st.dataframe(model_input, use_container_width=True)
 
     with right:
@@ -193,7 +193,7 @@ if submitted:
     # =========================
     # SHAP force plot（静态图）
     # =========================
-    st.subheader("SHAP Force Plot (Local Explanation)")
+    st.subheader("SHAP Force Plot")
 
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(model_input)
@@ -252,5 +252,6 @@ if submitted:
 
         st.write("Sum of |SHAP| by group (local):")
         st.dataframe(grp_sum.reset_index().rename(columns={"AbsSHAP": "Sum(|SHAP|)"}), use_container_width=True)
+
 
 
