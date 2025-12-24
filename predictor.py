@@ -4,6 +4,7 @@ import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 # =========================
 # 页面标题
@@ -12,14 +13,30 @@ st.title("DPN vs Normal Prediction (SWE + Radiomics)")
 st.caption("Based on duration, CSA, PCA features and radiomics features")
 
 # =========================
-# 载入模型 & 用于默认值的数据（建议用训练集/验证集都行）
+# ✅ 关键：用脚本目录定位文件（兼容 Streamlit Cloud/Linux）
 # =========================
-MODEL_PATH = r"C:\Users\jiang123\Desktop\LGB.pkl"
-DEFAULT_DATA_PATH = r"C:\Users\jiang123\Desktop\剪切波数据_结合_val_select.xlsx"  # 你也可改 train_select
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "LGB.pkl"
+DEFAULT_DATA_PATH = BASE_DIR / "剪切波数据_结合_val_select.xlsx"  # 你仓库里的文件名
 
+# （可选）调试：看看云端是否识别到了文件
+# st.write("BASE_DIR:", str(BASE_DIR))
+# st.write("Files:", [p.name for p in BASE_DIR.iterdir()])
+# st.write("MODEL_PATH exists:", MODEL_PATH.exists())
+# st.write("DATA_PATH exists:", DEFAULT_DATA_PATH.exists())
+
+if not MODEL_PATH.exists():
+    st.error(f"❌ 找不到模型文件：{MODEL_PATH.name}（请确认它和 predictor.py 在同一目录）")
+    st.stop()
+
+if not DEFAULT_DATA_PATH.exists():
+    st.error(f"❌ 找不到默认数据文件：{DEFAULT_DATA_PATH.name}（请确认它和 predictor.py 在同一目录）")
+    st.stop()
+
+# =========================
+# 载入模型 & 默认数据
+# =========================
 model = joblib.load(MODEL_PATH)
-
-# 读默认数据（Excel）
 df_default = pd.read_excel(DEFAULT_DATA_PATH)
 
 # 标签列名：如果是 target/label 二选一
@@ -78,13 +95,12 @@ with st.form("input_form"):
     for col in feature_names:
         default_val = float(X_default[col].median())
 
-        # 你可以按需求自定义范围/步长，这里给通用设置
-        if col in ["duration"]:
+        if col == "duration":
             inputs[col] = st.number_input(col, value=float(default_val), min_value=0.0, max_value=1000.0, step=1.0)
-        elif col in ["CSA"]:
-            inputs[col] = st.number_input(col, value=float(default_val), min_value=0.0, max_value=10.0, step=0.01, format="%.4f")
+        elif col == "CSA":
+            inputs[col] = st.number_input(col, value=float(default_val), min_value=0.0, max_value=10.0,
+                                          step=0.01, format="%.4f")
         else:
-            # PCA / radiomics：可能正负都有，范围给宽一点
             inputs[col] = st.number_input(col, value=float(default_val), step=0.01, format="%.6f")
 
     submitted = st.form_submit_button("Submit Prediction")
@@ -104,7 +120,7 @@ if submitted:
     st.subheader("Prediction Result")
     st.markdown(f"**Estimated probability (class=1):** {probability:.1f}%")
 
-    # ===== 分层（用默认数据分位数做阈值：这里给你一个简单三分法，可自己改）=====
+    # ===== 分层阈值：用默认数据分位数 =====
     y_probs = model.predict_proba(X_default)[:, 1]
     low_th = np.percentile(y_probs, 50)
     mid_th = np.percentile(y_probs, 88.07)
@@ -130,7 +146,6 @@ if submitted:
         shap_value_sample = shap_values[0]
         expected_value = explainer.expected_value
 
-    # 画 force plot 并保存为图片，再展示
     plt.figure()
     shap.force_plot(
         base_value=expected_value,
@@ -140,8 +155,10 @@ if submitted:
         show=False
     )
 
-    out_png = "shap_force_plot.png"
+    out_png = str(BASE_DIR / "shap_force_plot.png")  # ✅ 保存到脚本目录更稳
     plt.savefig(out_png, bbox_inches="tight", dpi=300)
     plt.close()
 
     st.image(out_png)
+
+
