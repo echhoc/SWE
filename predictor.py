@@ -8,15 +8,15 @@ from pathlib import Path
 from io import BytesIO
 
 # =========================
-# 页面设置
+# 页面设置（✅ 已改网站名称）
 # =========================
 st.set_page_config(
-    page_title="DPN vs Normal (SWE + Radiomics)",
+    page_title="A Multimodal Imaging Prediction Model Integrating Shear Wave Elastography for Diabetic Peripheral Neuropathy",
     layout="wide",
 )
 
-st.title("DPN vs Normal Prediction (SWE + Radiomics)")
-st.caption("Clinical/Ultrasound + Deep learning (PCA) + Radiomics features")
+st.title("A Multimodal Imaging Prediction Model Integrating Shear Wave Elastography for Diabetic Peripheral Neuropathy")
+st.caption("Clinical/Ultrasound + Radiomics + Deep learning (PCA) features")
 
 # =========================
 # ✅ 基于脚本目录定位文件（兼容 Streamlit Cloud / Linux）
@@ -44,7 +44,6 @@ except Exception as e:
     st.error(f"❌ 读取默认数据失败：{DEFAULT_DATA_PATH.name}\n\n错误信息：{e}")
     st.stop()
 
-# 标签列名：target/label 二选一
 label_col = None
 for c in ["target", "label"]:
     if c in df_default.columns:
@@ -54,7 +53,7 @@ for c in ["target", "label"]:
 X_default = df_default.drop(columns=[label_col]) if label_col else df_default.copy()
 
 # =========================
-# ✅ 三大类特征分组（你定义的）
+# ✅ 三大类特征分组
 # =========================
 group_clinical = ["duration", "CSA"]
 
@@ -76,16 +75,14 @@ group_radiomics = [
     "wavelet-HHL_glszm_LargeAreaEmphasis",
 ]
 
-# ✅ 模型输入特征顺序（强制对齐）
+# ✅ 模型输入特征顺序（⚠️ 不改，保证与训练一致）
 feature_names = group_clinical + group_dl + group_radiomics
 
-# ✅ 检查默认数据是否缺列
 missing = [c for c in feature_names if c not in X_default.columns]
 if missing:
     st.error(f"❌ 默认数据缺少这些特征列：{missing}\n请确认 Excel 表头与模型训练一致。")
     st.stop()
 
-# 强制只取这些列，并按 feature_names 排序
 X_default = X_default[feature_names]
 
 # =========================
@@ -99,11 +96,10 @@ def fig_to_bytesio(dpi=250):
     return buf
 
 # =========================
-# 输入表单：✅ 分组 + 横向多列
+# ✅ 输入表单：交换 Radiomics 和 PCA 的显示位置
 # =========================
 with st.form("input_form"):
-    st.subheader("请输入以下特征（可用默认中位数）")
-
+    st.subheader("Please input the following features")
     inputs = {}
 
     # ===== ① 临床/超声：2列 =====
@@ -130,11 +126,11 @@ with st.form("input_form"):
                 format="%.4f"
             )
 
-    # ===== ② 深度学习特征（PCA）：4列 =====
-    st.markdown("### ② Deep Learning Features (PCA)")
-    cols_dl = st.columns(4)
-    for i, col in enumerate(group_dl):
-        box = cols_dl[i % 4]
+    # ===== ② Radiomics Features：4列（✅ 提前）=====
+    st.markdown("### ② Radiomics Features")
+    cols_rad = st.columns(4)
+    for i, col in enumerate(group_radiomics):
+        box = cols_rad[i % 4]
         default_val = float(X_default[col].median())
         inputs[col] = box.number_input(
             col,
@@ -143,11 +139,11 @@ with st.form("input_form"):
             format="%.6f"
         )
 
-    # ===== ③ 影像组学特征：4列 =====
-    st.markdown("### ③ Radiomics Features")
-    cols_rad = st.columns(4)
-    for i, col in enumerate(group_radiomics):
-        box = cols_rad[i % 4]
+    # ===== ③ Deep Learning Features (PCA)：4列（✅ 放到后面）=====
+    st.markdown("### ③ Deep Learning Features (PCA)")
+    cols_dl = st.columns(4)
+    for i, col in enumerate(group_dl):
+        box = cols_dl[i % 4]
         default_val = float(X_default[col].median())
         inputs[col] = box.number_input(
             col,
@@ -162,7 +158,7 @@ with st.form("input_form"):
 # 预测 & 解释
 # =========================
 if submitted:
-    # ✅ 强制列顺序对齐
+    # ⚠️ 仍然按 feature_names（Clinical + PCA + Radiomics）喂给模型
     model_input = pd.DataFrame([inputs], columns=feature_names)
 
     left, right = st.columns([1.2, 1.0], gap="large")
@@ -179,7 +175,6 @@ if submitted:
 
         st.markdown(f"**Estimated probability (class=1 / DPN):** {prob1*100:.1f}%")
 
-        # 分层：用默认数据分位数（你之前的逻辑）
         y_probs = model.predict_proba(X_default)[:, 1]
         low_th = np.percentile(y_probs, 50)
         mid_th = np.percentile(y_probs, 88.07)
@@ -203,9 +198,8 @@ if submitted:
     explainer = shap.TreeExplainer(model)
     shap_values = explainer.shap_values(model_input)
 
-    # 二分类兼容：取 class=1
     if isinstance(shap_values, list):
-        shap_value_sample = shap_values[1][0]      # (n_features,)
+        shap_value_sample = shap_values[1][0]
         expected_value = explainer.expected_value[1]
     else:
         shap_value_sample = shap_values[0]
@@ -222,7 +216,7 @@ if submitted:
     st.image(fig_to_bytesio(dpi=300), use_column_width=True)
 
     # =========================
-    # 论文更好读：Top SHAP bar（可折叠）
+    # Top SHAP bar
     # =========================
     with st.expander("Show SHAP bar plot (recommended for paper)", expanded=True):
         contrib = pd.Series(shap_value_sample, index=feature_names)
@@ -234,15 +228,16 @@ if submitted:
         plt.axvline(0, linewidth=1)
         plt.xlabel("SHAP value (impact on model output for class=1 / DPN)")
         plt.title("Top-15 feature contributions (local)")
-        st.image(fig_to_bytesio(dpi=250), use_column_width=False)
+        st.image(fig_to_bytesio(dpi=250), use_container_width=False)
 
     # =========================
-    # 可选：显示分组汇总贡献（更适合解释给导师）
+    # ✅ 分组汇总贡献（顺序也按页面显示：Clinical -> Radiomics -> PCA）
     # =========================
-    with st.expander("Show grouped contribution summary (Clinical vs DL vs Radiomics)", expanded=False):
+    with st.expander("Show grouped contribution summary (Clinical vs Radiomics vs Deep Learning)", expanded=False):
         shap_abs = np.abs(shap_value_sample)
         s = pd.Series(shap_abs, index=feature_names)
 
+        # 注意：feature_names 仍是 Clinical + PCA + Radiomics
         grp = pd.DataFrame({
             "Group": (["Clinical&US"] * len(group_clinical)) +
                      (["DeepLearning(PCA)"] * len(group_dl)) +
@@ -251,6 +246,11 @@ if submitted:
             "AbsSHAP": s.values
         })
 
-        grp_sum = grp.groupby("Group")["AbsSHAP"].sum().sort_values(ascending=False)
+        # ✅ 为了显示顺序与页面一致，这里重排
+        order = ["Clinical&US", "Radiomics", "DeepLearning(PCA)"]
+        grp_sum = grp.groupby("Group")["AbsSHAP"].sum().reindex(order)
+
         st.write("Sum of |SHAP| by group (local):")
         st.dataframe(grp_sum.reset_index().rename(columns={"AbsSHAP": "Sum(|SHAP|)"}), use_container_width=True)
+
+
