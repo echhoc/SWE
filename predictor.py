@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 st.title("A Multimodal Imaging Prediction Model Integrating Shear Wave Elastography for Diabetic Peripheral Neuropathy")
-st.caption("Clinical/Ultrasound + Radiomics + Deep learning (PCA) features")
+st.caption("Clinical/Ultrasound + Radiomics + Deep learning features (PCA)")
 
 # =========================
 # ✅ 基于脚本目录定位文件（兼容 Streamlit Cloud / Linux）
@@ -252,6 +252,7 @@ if submitted:
 
         st.write("Sum of |SHAP| by group (local):")
         st.dataframe(grp_sum.reset_index().rename(columns={"AbsSHAP": "Sum(|SHAP|)"}), use_container_width=True)
+
 
 
 
